@@ -31,9 +31,9 @@
             const headerCode = document.getElementById("headerCode").value;
 
             // Đẩy file main.ino
-            await pushFile("src/main.ino", inoCode);
+            await pushFile("src/src.ino", inoCode);
             // Đẩy file myLibrary.h
-            await pushFile("src/myLibrary.h", headerCode);
+            await pushFile("src/name.h", headerCode);
 
             alert("Code pushed to GitHub! Waiting for build...");
             checkArtifacts();
