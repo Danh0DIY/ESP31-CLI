@@ -3,54 +3,126 @@ name: ESP32 Build
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Install Arduino CLI
-      run: |
-        wget https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz
-        tar -xvzf arduino-cli_latest_Linux_64bit.tar.gz
-        sudo mv arduino-cli /usr/local/bin/
-        arduino-cli config init
-        arduino-cli core update-index
-        arduino-cli core install esp32:esp32@2.0.14
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: latest
 
-    - name: Install Libraries
-      run: |
-        arduino-cli lib install WiFi
-        arduino-cli lib install Blynk
-        arduino-cli lib install ESPAsyncWebServer
-        arduino-cli lib install AsyncTCP
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
 
-    - name: Compile Sketch
-      run: |
-        arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build src/
-      env:
-        ARDUINO_CLI_SKETCHBOOK_DIR: ${{ github.workspace }}
+      - name: Read build config
+        id: cfg
+        run: |
+          if [ -f build.json ]; then
+            echo "CFG=$(cat build.json | tr -d '\n' | sed 's/\"/\\\"/g')" >> $GITHUB_OUTPUT
+          else
+            echo "CFG={}" >> $GITHUB_OUTPUT
+          fi
 
-    - name: Upload build artifacts to GitHub
-      uses: actions/upload-artifact@v4
-      with:
-        name: esp32-firmware
-        path: |
-          build/*.bin
-          build/*.elf
+      - name: Parse config
+        id: parse
+        run: |
+          echo '${{ steps.cfg.outputs.CFG }}' > cfg.json
+          BOARD=$(jq -r '.board // "esp32:esp32:esp32"' cfg.json)
+          LIBS=$(jq -r '.libs // ""' cfg.json)
+          FWNAME=$(jq -r '.fwname // ""' cfg.json)
+          echo "board=$BOARD" >> $GITHUB_OUTPUT
+          echo "libs=$LIBS" >> $GITHUB_OUTPUT
+          echo "fwname=$FWNAME" >> $GITHUB_OUTPUT
 
-    - name: Save artifact link to artifacts.json
-      run: |
-        echo "{\"link\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ github.run_id }}\"}" > artifacts.json
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-        git add artifacts.json
-        git commit -m "Update artifacts.json with download link"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install libraries
+        if: steps.parse.outputs.libs != ''
+        run: |
+          IFS=',' read -ra arr <<< "${{ steps.parse.outputs.libs }}"
+          for lib in "${arr[@]}"; do
+            lib_trim=$(echo "$lib" | xargs)
+            if [ -n "$lib_trim" ]; then
+              echo "Installing: $lib_trim"
+              arduino-cli lib install "$lib_trim" || true
+            fi
+          done
+
+      - name: Build
+        run: |
+          mkdir -p out
+          FQBN="${{ steps.parse.outputs.board }}"
+          echo "Board: $FQBN"
+          arduino-cli compile --fqbn "$FQBN" --output-dir out --warnings none src || exit 1
+
+      - name: Name firmware & collect
+        id: collect
+        run: |
+          BOARD_SHORT=$(echo "${{ steps.parse.outputs.board }}" | awk -F: '{print $3}')
+          OUTBIN=$(ls out/*.bin | head -n1)
+          NAME="${{ steps.parse.outputs.fwname }}"
+          if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then NAME="firmware"; fi
+          DEST="out/${NAME}_${BOARD_SHORT}.bin"
+          mv "$OUTBIN" "$DEST"
+          echo "dest=$DEST" >> $GITHUB_OUTPUT
+          echo "board_short=$BOARD_SHORT" >> $GITHUB_OUTPUT
+          echo "dest_name=$(basename "$DEST")" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact (Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.collect.outputs.dest_name }}
+          path: ${{ steps.collect.outputs.dest }}
+
+      - name: Prepare dist branch
+        run: |
+          git fetch origin dist || true
+          if git ls-remote --exit-code --heads origin dist; then
+            git checkout -B dist origin/dist
+          else
+            git checkout --orphan dist
+            rm -rf ./*
+            git commit --allow-empty -m "init dist"
+          fi
+
+      - name: Update dist files
+        run: |
+          mkdir -p bin
+          cp "${{ steps.collect.outputs.dest }}" "bin/${{ steps.collect.outputs.dest_name }}"
+
+          # Update artifacts.json
+          if [ -f artifacts.json ]; then
+            cp artifacts.json artifacts.tmp.json
+          else
+            echo '{}' > artifacts.tmp.json
+          fi
+          BOARD="${{ steps.collect.outputs.board_short }}"
+          URL="https://raw.githubusercontent.com/${{ github.repository }}/dist/bin/${{ steps.collect.outputs.dest_name }}"
+          TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          python - << 'PY'
+import json, os
+p='artifacts.tmp.json'
+with open(p,'r') as f: j=json.load(f or {})
+board=os.environ['BOARD']
+url=os.environ['URL']
+ts=os.environ['TS']
+j.setdefault(board, []).append({"download_url": url, "timestamp": ts})
+with open('artifacts.json','w') as f: json.dump(j,f, indent=2, ensure_ascii=False)
+PY
+
+          git add bin artifacts.json
+          git -c user.name="github-actions" -c user.email="actions@users.noreply.github.com" commit -m "dist: add ${{ steps.collect.outputs.dest_name }}"
+          git push origin dist
