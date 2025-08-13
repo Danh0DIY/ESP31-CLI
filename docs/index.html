@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Code Editor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        textarea { width: 100%; height: 200px; margin-bottom: 10px; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        #downloadLink { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>ESP32 Code Editor</h1>
+    <h3>Main Sketch (.ino)</h3>
+    <textarea id="inoCode" placeholder="Enter your .ino code here..."></textarea>
+    <h3>Header File (.h)</h3>
+    <textarea id="headerCode" placeholder="Enter your .h code here..."></textarea>
+    <button onclick="pushCode()">Push Code to GitHub</button>
+    <div id="downloadLink"></div>
+
+    <script>
+        const repoOwner = "your-username"; // Thay bằng tên người dùng GitHub
+        const repoName = "ESP32-Project";
+        const token = "YOUR_PERSONAL_ACCESS_TOKEN"; // Thay bằng GitHub Personal Access Token
+
+        async function pushCode() {
+            const inoCode = document.getElementById("inoCode").value;
+            const headerCode = document.getElementById("headerCode").value;
+
+            // Đẩy file main.ino
+            await pushFile("src/main.ino", inoCode);
+            // Đẩy file myLibrary.h
+            await pushFile("src/myLibrary.h", headerCode);
+
+            alert("Code pushed to GitHub! Waiting for build...");
+            checkArtifacts();
+        }
+
+        async function pushFile(path, content) {
+            const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}`;
+            const encodedContent = btoa(content); // Mã hóa base64
+            const response = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/vnd.github.v3+json"
+                },
+                body: JSON.stringify({
+                    message: `Update ${path} via web`,
+                    content: encodedContent,
+                    branch: "main"
+                })
+            });
+            return response.json();
+        }
+
+        async function checkArtifacts() {
+            const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/artifacts.json`;
+            const response = await fetch(url, {
+                headers: { Accept: "application/vnd.github.v3+json" }
+            });
+            const data = await response.json();
+            const artifacts = JSON.parse(atob(data.content));
+            const downloadLink = document.getElementById("downloadLink");
+            if (artifacts.link) {
+                downloadLink.innerHTML = `<a href="${artifacts.link}" download>Download .bin file</a>`;
+            } else {
+                downloadLink.innerHTML = "Build in progress, please wait...";
+                setTimeout(checkArtifacts, 5000); // Kiểm tra lại sau 5 giây
+            }
+        }
+    </script>
+</body>
+</html>
