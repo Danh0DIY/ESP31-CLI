@@ -1,0 +1,56 @@
+name: ESP32 Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Arduino CLI
+      run: |
+        wget https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz
+        tar -xvzf arduino-cli_latest_Linux_64bit.tar.gz
+        sudo mv arduino-cli /usr/local/bin/
+        arduino-cli config init
+        arduino-cli core update-index
+        arduino-cli core install esp32:esp32@2.0.14
+
+    - name: Install Libraries
+      run: |
+        arduino-cli lib install WiFi
+        arduino-cli lib install Blynk
+        arduino-cli lib install ESPAsyncWebServer
+        arduino-cli lib install AsyncTCP
+
+    - name: Compile Sketch
+      run: |
+        arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build src/
+      env:
+        ARDUINO_CLI_SKETCHBOOK_DIR: ${{ github.workspace }}
+
+    - name: Upload build artifacts to GitHub
+      uses: actions/upload-artifact@v4
+      with:
+        name: esp32-firmware
+        path: |
+          build/*.bin
+          build/*.elf
+
+    - name: Save artifact link to artifacts.json
+      run: |
+        echo "{\"link\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ github.run_id }}\"}" > artifacts.json
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add artifacts.json
+        git commit -m "Update artifacts.json with download link"
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
