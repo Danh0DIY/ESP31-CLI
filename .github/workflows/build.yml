@@ -32,7 +32,7 @@ jobs:
 
     - name: Compile Sketch
       run: |
-        arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build src/
+        arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build src
       env:
         ARDUINO_CLI_SKETCHBOOK_DIR: ${{ github.workspace }}
 
