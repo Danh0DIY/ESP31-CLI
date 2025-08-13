@@ -1,77 +1,231 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Code Editor</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        textarea { width: 100%; height: 200px; margin-bottom: 10px; }
-        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        #downloadLink { margin-top: 20px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ESP32 Web Compiler (Lite)</title>
+  <style>
+    :root { --bg:#0b1020; --card:#121939; --muted:#9aa3b2; --text:#e6e9ef; --accent:#5cc8ff; }
+    *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;background:linear-gradient(120deg,#0b1020,#101a2d 60%,#0b1020);color:var(--text)}
+    .wrap{max-width:1100px;margin:24px auto;padding:16px}
+    .title{font-size:28px;font-weight:800;letter-spacing:.2px;margin-bottom:8px}
+    .sub{color:var(--muted);font-size:14px;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:1fr 340px; gap:16px}
+    .card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.2);overflow:hidden}
+    .card h3{margin:0;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06);font-size:16px;background:rgba(255,255,255,.02)}
+    .card .body{padding:12px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    select,input,textarea{width:100%;background:#0f1530;border:1px solid rgba(255,255,255,.08);color:var(--text);padding:10px 12px;border-radius:10px;outline:none}
+    textarea{min-height:120px}
+    .row{display:grid;grid-template-columns:1fr 1fr; gap:10px}
+    .btn{appearance:none;border:0;background:linear-gradient(180deg,#4fb3ff,#3198ff);color:#0a1024;font-weight:800;border-radius:12px;padding:10px 14px;cursor:pointer}
+    .btn:disabled{filter:grayscale(1);opacity:.7;cursor:not-allowed}
+    .muted{color:var(--muted);font-size:12px}
+    .editor{height:520px}
+    .k{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{font-size:12px;border:1px solid rgba(255,255,255,.1);padding:6px 8px;border-radius:999px;color:var(--muted)}
+    .log{white-space:pre-wrap;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;background:#0c1228;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,.08);height:140px;overflow:auto}
+    a{color:var(--accent);text-decoration:none}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.3/ace.js" integrity="sha512-u4Y1vZJwq1pM5b1R1TnEGiXx2zRBgXQIX5qZcFqg3Aq3VwT3o0Hf7GQbqEwYcRk0UqHqXc6k+N2Q8x6sTn0tYA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
-    <h1>ESP32 Code Editor</h1>
-    <h3>Main Sketch (.ino)</h3>
-    <textarea id="inoCode" placeholder="Enter your .ino code here..."></textarea>
-    <h3>Header File (.h)</h3>
-    <textarea id="headerCode" placeholder="Enter your .h code here..."></textarea>
-    <button onclick="pushCode()">Push Code to GitHub</button>
-    <div id="downloadLink"></div>
+  <div class="wrap">
+    <div class="title">ESP32 Web Compiler (Lite)</div>
+    <div class="sub">Viết code ➜ chọn board & thư viện ➜ <b>Gửi build</b> ➜ tải file <code>.bin</code>. (Giữ nguyên cấu trúc: code ở <code>src/</code>, trang web trong <code>docs/</code>, workflow trong <code>.github/</code>)</div>
 
-    <script>
-        const repoOwner = "your-username"; // Thay bằng tên người dùng GitHub
-        const repoName = "ESP32-Project";
-        const token = "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"; // Thay bằng GitHub Personal Access Token
+    <div class="grid">
+      <div class="card">
+        <h3>Trình soạn thảo</h3>
+        <div class="body">
+          <div id="editor" class="editor">// Ví dụ: nháy LED cho ESP32
+#include <Arduino.h>
+int ledPin = 2;
+void setup(){ pinMode(ledPin, OUTPUT); }
+void loop(){ digitalWrite(ledPin, HIGH); delay(500); digitalWrite(ledPin, LOW); delay(500); }</div>
+          <div class="k" style="margin-top:10px">
+            <span class="pill">Ctrl/Cmd + S để lưu sang <code>src/src.ino</code></span>
+            <span class="pill">Dữ liệu sẽ được commit bằng token của bạn</span>
+          </div>
+        </div>
+      </div>
 
-        async function pushCode() {
-            const inoCode = document.getElementById("inoCode").value;
-            const headerCode = document.getElementById("headerCode").value;
+      <div class="card">
+        <h3>Tùy chọn build</h3>
+        <div class="body">
+          <label>Board</label>
+          <select id="board">
+            <option value="esp32:esp32:esp32">ESP32 (WROOM/WROVER)</option>
+            <option value="esp32:esp32:esp32c3">ESP32-C3</option>
+            <option value="esp32:esp32:esp32s3">ESP32-S3</option>
+            <option value="esp32:esp32:esp32s2">ESP32-S2</option>
+          </select>
 
-            // Đẩy file main.ino
-            await pushFile("src/src.ino", inoCode);
-            // Đẩy file myLibrary.h
-            await pushFile("src/name.h", headerCode);
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label>Thư viện (CSV)</label>
+              <input id="libs" placeholder="VD: Adafruit GFX Library, Adafruit ST7735 and ST7789 Library"/>
+              <div class="muted" style="margin-top:6px">Tên giống Library Manager. Để trống nếu không cần.</div>
+            </div>
+            <div>
+              <label>Tên firmware (tùy chọn)</label>
+              <input id="fwname" placeholder="vd: my_firmware"/>
+            </div>
+          </div>
 
-            alert("Code pushed to GitHub! Waiting for build...");
-            checkArtifacts();
-        }
+          <h3 style="margin-top:14px">Kết nối GitHub</h3>
+          <label>Owner / Repo / Branch</label>
+          <div class="row">
+            <input id="owner" placeholder="vd: Danhlt09"/>
+            <input id="repo" placeholder="vd: ESP32-CLI-main"/>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <input id="branch" placeholder="main" value="main"/>
+            <input id="token" placeholder="GitHub PAT (fine-grained)" type="password"/>
+          </div>
+          <div class="muted" style="margin-top:6px">Token cần quyền: <b>contents:read/write</b>, <b>actions:read</b>. Token chỉ lưu trên trình duyệt của bạn.</div>
 
-        async function pushFile(path, content) {
-            const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}`;
-            const encodedContent = btoa(content); // Mã hóa base64
-            const response = await fetch(url, {
-                method: "PUT",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    Accept: "application/vnd.github.v3+json"
-                },
-                body: JSON.stringify({
-                    message: `Update ${path} via web`,
-                    content: encodedContent,
-                    branch: "main"
-                })
-            });
-            return response.json();
-        }
+          <div style="display:flex; gap:10px; margin-top:12px">
+            <button class="btn" id="saveBtn">Lưu code ➜ src/src.ino</button>
+            <button class="btn" id="buildBtn">Gửi build</button>
+          </div>
 
-        async function checkArtifacts() {
-            const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/artifacts.json`;
-            const response = await fetch(url, {
-                headers: { Accept: "application/vnd.github.v3+json" }
-            });
-            const data = await response.json();
-            const artifacts = JSON.parse(atob(data.content));
-            const downloadLink = document.getElementById("downloadLink");
-            if (artifacts.link) {
-                downloadLink.innerHTML = `<a href="${artifacts.link}" download>Download .bin file</a>`;
-            } else {
-                downloadLink.innerHTML = "Build in progress, please wait...";
-                setTimeout(checkArtifacts, 5000); // Kiểm tra lại sau 5 giây
+          <div class="muted" style="margin-top:10px">Sau khi build xong, file .bin sẽ được đẩy sang branch <code>dist</code>, và trang này sẽ hiện link tải.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Kết quả • Tải xuống</h3>
+      <div class="body">
+        <div id="result" class="log">Chưa có tác vụ.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const editor = ace.edit("editor");
+    editor.setTheme("ace/theme/one_dark");
+    editor.session.setMode("ace/mode/c_cpp");
+    editor.setOption("fontSize", "14px");
+
+    async function ghRequest(method, url, token, body){
+      const r = await fetch(url, {
+        method,
+        headers: { "Authorization": "token " + token, "Accept": "application/vnd.github+json" },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      if(!r.ok){
+        const t = await r.text();
+        throw new Error(method + " " + url + " => " + r.status + " " + t);
+      }
+      return r.json();
+    }
+
+    function b64(s){ return btoa(unescape(encodeURIComponent(s))); }
+
+    function uiLog(msg){ const el = document.getElementById("result"); el.textContent = msg; }
+
+    async function saveFile(){
+      const owner = document.getElementById("owner").value.trim();
+      const repo = document.getElementById("repo").value.trim();
+      const branch = document.getElementById("branch").value.trim() || "main";
+      const token = document.getElementById("token").value.trim();
+      if(!owner || !repo || !token){ return uiLog("Thiếu Owner/Repo/Token"); }
+      const content = editor.getValue();
+
+      // Get current commit SHA and tree
+      uiLog("Đang lấy HEAD...");
+      const ref = await ghRequest("GET", `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`, token);
+      const headSha = ref.object.sha;
+
+      // Create new tree with updated src/src.ino
+      uiLog("Đang tạo tree mới ...");
+      const blob = await ghRequest("POST", `https://api.github.com/repos/${owner}/${repo}/git/blobs`, token, {
+        content: b64(content), encoding: "base64"
+      });
+
+      const buildJson = {
+        board: document.getElementById("board").value,
+        libs: document.getElementById("libs").value.trim(),
+        fwname: document.getElementById("fwname").value.trim() || ""
+      };
+      const blobCfg = await ghRequest("POST", `https://api.github.com/repos/${owner}/${repo}/git/blobs`, token, {
+        content: b64(JSON.stringify(buildJson, null, 2)), encoding: "base64"
+      });
+
+      const baseCommit = await ghRequest("GET", `https://api.github.com/repos/${owner}/${repo}/git/commits/${headSha}`, token);
+      const newTree = await ghRequest("POST", `https://api.github.com/repos/${owner}/${repo}/git/trees`, token, {
+        base_tree: baseCommit.tree.sha,
+        tree: [
+          { path: "src/src.ino", mode: "100644", type: "blob", sha: blob.sha },
+          { path: "build.json", mode: "100644", type: "blob", sha: blobCfg.sha }
+        ]
+      });
+
+      // Create commit & update ref
+      const now = new Date().toISOString();
+      uiLog("Đang commit thay đổi ...");
+      const newCommit = await ghRequest("POST", `https://api.github.com/repos/${owner}/${repo}/git/commits`, token, {
+        message: `web: update src/src.ino & build.json at ${now}`,
+        tree: newTree.sha, parents: [headSha]
+      });
+      await ghRequest("PATCH", `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`, token, {
+        sha: newCommit.sha
+      });
+      uiLog("Đã lưu code vào src/src.ino và build.json. Bấm 'Gửi build' để bắt đầu build.");
+    }
+
+    async function triggerBuild(){
+      const owner = document.getElementById("owner").value.trim();
+      const repo = document.getElementById("repo").value.trim();
+      const branch = document.getElementById("branch").value.trim() || "main";
+      const token = document.getElementById("token").value.trim();
+      if(!owner || !repo || !token){ return uiLog("Thiếu Owner/Repo/Token"); }
+
+      uiLog("Gửi build = push lên nhánh main. Workflow sẽ chạy ...");
+      try{
+        await saveFile();
+        uiLog("Đang chờ workflow chạy (~1-3 phút). Trang sẽ tự lấy artifacts.json để hiển thị link tải ...");
+        // Poll artifacts.json on dist branch
+        const fwname = (document.getElementById("fwname").value.trim() || "firmware");
+        const board = document.getElementById("board").value.split(":").pop();
+        const url = `https://raw.githubusercontent.com/${owner}/${repo}/dist/artifacts.json?ts=${Date.now()}`;
+
+        const started = Date.now();
+        const poll = setInterval(async () => {
+          try {
+            const r = await fetch(url, { cache: "no-store" });
+            if(r.ok){
+              const j = await r.json();
+              const k = `${board}`;
+              if(j[k] && j[k].length){
+                const last = j[k][j[k].length-1];
+                const link = last.download_url;
+                uiLog(`OK! Tải firmware: ${link}`);
+                clearInterval(poll);
+              }
             }
-        }
-    </script>
+            if(Date.now() - started > 300000){ // 5 min timeout
+              clearInterval(poll);
+              uiLog("Quá thời gian chờ. Kiểm tra tab Actions và file artifacts.json trên nhánh dist.");
+            }
+          } catch(e){ /* ignore */ }
+        }, 8000);
+      } catch(e){
+        uiLog("Lỗi: " + e.message);
+      }
+    }
+
+    document.getElementById("saveBtn").onclick = saveFile;
+    document.getElementById("buildBtn").onclick = triggerBuild;
+
+    // Save shortcut
+    window.addEventListener("keydown", (e)=>{
+      if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==="s"){
+        e.preventDefault(); saveFile();
+      }
+    });
+  </script>
 </body>
 </html>
