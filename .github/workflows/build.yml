@@ -23,7 +23,12 @@ jobs:
         arduino-cli core update-index
         arduino-cli core install esp32:esp32@2.0.14
 
-    
+    - name: Install Libraries
+      run: |
+        arduino-cli lib install WiFi
+        arduino-cli lib install Blynk
+        arduino-cli lib install ESPAsyncWebServer
+        arduino-cli lib install AsyncTCP
 
     - name: Compile Sketch
       run: |
