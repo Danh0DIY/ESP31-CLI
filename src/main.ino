@@ -1,4 +1,3 @@
-// Chân LED
 int ledPin = 8;
 
 void setup() {
